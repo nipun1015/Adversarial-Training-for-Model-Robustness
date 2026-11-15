@@ -1,0 +1,11 @@
+model,epsilon,accuracy,attack_success_rate
+Baseline,0,98.8,0.0
+Baseline,0.05,94.82,4.02834008097166
+Baseline,0.1,83.07,15.921052631578947
+Baseline,0.15,60.98,38.27935222672065
+Baseline,0.2,34.63,64.9493927125506
+Adversarially Trained,0,98.75,0.0
+Adversarially Trained,0.05,97.63,1.1341772151898735
+Adversarially Trained,0.1,95.8,2.9873417721518987
+Adversarially Trained,0.15,92.62,6.207594936708861
+Adversarially Trained,0.2,87.05,11.848101265822784

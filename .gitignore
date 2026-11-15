@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+notebooks/data/
+
+# Private study guide & helper script
+*Guide.pdf
+generate_guide_pdf.py
+
+Adversarial_Training_Project_Guide.pdf

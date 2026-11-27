@@ -17,7 +17,9 @@ BATCH_SIZE = 128
 DATA_DIR = Path(__file__).resolve().parents[1] / "notebooks" / "data"
 
 
-def get_data_loaders():
+def get_data_loaders(train_seed=SEED):
+    # The train/val SPLIT always uses SEED (42) so every run sees the same
+    # validation images. train_seed only changes the shuffling order.
     transform = transforms.ToTensor()
 
     # Load MNIST training data
@@ -50,7 +52,7 @@ def get_data_loaders():
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        generator=torch.Generator().manual_seed(SEED),
+        generator=torch.Generator().manual_seed(train_seed),
         num_workers=0
     )
 

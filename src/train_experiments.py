@@ -6,6 +6,7 @@ Models trained (same architecture, optimiser, epochs, batch size, data split):
     adv_eps0.10   : FGSM adversarial training, eps_train = 0.10
     adv_eps0.20   : FGSM adversarial training, eps_train = 0.20
     advRS_eps0.20 : FGSM with random start (Wong et al. 2020), eps_train = 0.20
+    advPGD_eps0.20: PGD-10 adversarial training (Madry et al. 2018), eps_train = 0.20
 
 Outputs
     models/<name>_seed<seed>.pth            checkpoint after the LAST epoch
@@ -14,6 +15,7 @@ Outputs
 No checkpoint selection is used: every model is simply the result of 5 epochs.
 (This avoids hiding unstable training, and never touches the test set.)
 Run:  python src/train_experiments.py            (add --force to retrain)
+      python src/train_experiments.py --only advPGD_eps0.20   (train just one regime)
 """
 import sys
 from pathlib import Path
@@ -30,7 +32,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from src.attacks import fgsm_attack, fgsm_rs_attack
+from src.attacks import fgsm_attack, fgsm_rs_attack, pgd_attack
 from src.data import get_data_loaders
 from src.model import MNISTCNN
 
@@ -42,7 +44,9 @@ CONFIGS = {              # name -> (eps_train, training attack)
     "adv_eps0.10": (0.10, "fgsm"),
     "adv_eps0.20": (0.20, "fgsm"),
     "advRS_eps0.20": (0.20, "fgsm_rs"),
+    "advPGD_eps0.20": (0.20, "pgd"),
 }
+TRAIN_PGD_STEPS = 10      # steps of the PGD attack used *during training*
 MONITOR_EPS = (0.10, 0.20)   # FGSM strengths logged on the validation set for every model
 
 MODEL_DIR = Path("models")
@@ -93,6 +97,9 @@ def train_one(name, eps_train, method, seed, epochs):
                 images = fgsm_attack(model, images, labels, eps_train, criterion)
             elif method == "fgsm_rs":
                 images = fgsm_rs_attack(model, images, labels, eps_train, criterion)
+            elif method == "pgd":
+                images = pgd_attack(model, images, labels, eps_train, criterion,
+                                    steps=TRAIN_PGD_STEPS)
             optimizer.zero_grad()
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -132,6 +139,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44])
     parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--only", nargs="+", choices=list(CONFIGS), default=None,
+                        help="train only these regimes (default: all)")
     parser.add_argument("--force", action="store_true", help="retrain even if checkpoint exists")
     args = parser.parse_args()
 
@@ -141,6 +150,8 @@ def main():
 
     for seed in args.seeds:
         for name, (eps_train, method) in CONFIGS.items():
+            if args.only and name not in args.only:
+                continue
             ckpt = MODEL_DIR / f"{name}_seed{seed}.pth"
             if ckpt.exists() and not args.force:
                 print(f"skip {ckpt} (exists; use --force to retrain)")

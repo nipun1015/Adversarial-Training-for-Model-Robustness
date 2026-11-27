@@ -22,14 +22,15 @@ RES = Path("results")
 PLOTS = RES / "plots"
 PLOTS.mkdir(parents=True, exist_ok=True)
 
-ORDER = ["baseline", "adv_eps0.10", "adv_eps0.20", "advRS_eps0.20"]
+ORDER = ["baseline", "adv_eps0.10", "adv_eps0.20", "advRS_eps0.20", "advPGD_eps0.20"]
 LABEL = {"baseline": "Baseline (clean training)",
          "adv_eps0.10": "Adversarial training, ε = 0.10",
          "adv_eps0.20": "Adversarial training, ε = 0.20",
-         "advRS_eps0.20": "Adv. training ε = 0.20 + random start"}
-COLOR = {"baseline": "#b04a3f", "adv_eps0.10": "#2f6f8f", "adv_eps0.20": "#3a8a5a", "advRS_eps0.20": "#c98a1a"}
+         "advRS_eps0.20": "Adv. training ε = 0.20 + random start",
+         "advPGD_eps0.20": "PGD adversarial training, ε = 0.20"}
+COLOR = {"baseline": "#b04a3f", "adv_eps0.10": "#2f6f8f", "adv_eps0.20": "#3a8a5a", "advRS_eps0.20": "#c98a1a", "advPGD_eps0.20": "#7a4fa3"}
 
-plt.rcParams.update({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False,
+plt.rcParams.update({"font.size": 9, "axes.spines.top": False, "axes.spines.right": False,
                      "axes.grid": True, "grid.alpha": 0.3, "figure.dpi": 120})
 
 df = pd.read_csv(RES / "all_results.csv")
@@ -45,7 +46,7 @@ print(f"Seeds found: {sorted(df['seed'].unique())}")
 
 
 def curve(metric, attack, fname, ylabel, title, ylim=(0, 100)):
-    fig, ax = plt.subplots(figsize=(7, 4.4))
+    fig, ax = plt.subplots(figsize=(7.2, 4.4))
     for m in ORDER:
         s = df[(df.model == m) & (df.attack == attack)].groupby("epsilon")[metric].agg(["mean", "std"]).fillna(0)
         ax.plot(s.index, s["mean"], marker="o", ms=4, color=COLOR[m], label=LABEL[m])
@@ -66,22 +67,26 @@ curve("attack_success_rate", "fgsm", "fgsm_asr_vs_eps.png", "Attack success rate
 curve("attack_success_rate", "pgd", "pgd_asr_vs_eps.png", "Attack success rate (%)", "PGD-10 attack")
 
 # ---------------------------------------------------------------- FGSM vs PGD per model
-fig, axes = plt.subplots(1, 4, figsize=(14, 3.7), sharey=True)
+fig, axes = plt.subplots(2, 3, figsize=(7.2, 5.4), sharey=True)
+axes = axes.ravel()
 for ax, m in zip(axes, ORDER):
     for atk, ls in (("fgsm", "-"), ("pgd", "--")):
-        s = df[(df.model == m) & (df.attack == atk)].groupby("epsilon")["accuracy"].mean()
-        ax.plot(s.index, s.values, ls, marker="o", ms=3.5, color=COLOR[m], label=atk.upper() if atk == "fgsm" else "PGD-10")
-    ax.set_title(LABEL[m], fontsize=9)
+        s_ = df[(df.model == m) & (df.attack == atk)].groupby("epsilon")["accuracy"].mean()
+        ax.plot(s_.index, s_.values, ls, marker="o", ms=3.5, color=COLOR[m], label="FGSM" if atk == "fgsm" else "PGD-10")
+    ax.set_title(LABEL[m], fontsize=8)
     ax.set_xlabel("ε")
     ax.set_ylim(0, 100)
     ax.legend(frameon=False, fontsize=8)
-axes[0].set_ylabel("Test accuracy (%)")
+for k in (0, 3):
+    axes[k].set_ylabel("Test accuracy (%)")
+for ax in axes[len(ORDER):]:
+    ax.axis("off")
 fig.tight_layout()
 fig.savefig(PLOTS / "fgsm_vs_pgd_per_model.png", dpi=200)
 plt.close(fig)
 
 # ---------------------------------------------------------------- trade-off scatter
-fig, ax = plt.subplots(figsize=(9.2, 4.6))
+fig, ax = plt.subplots(figsize=(7.2, 5.6))
 for m in ORDER:
     clean = df[(df.model == m) & (df.attack == "fgsm") & (df.epsilon == 0)].accuracy
     for atk, mk in (("fgsm", "o"), ("pgd", "s")):
@@ -92,7 +97,7 @@ for m in ORDER:
 ax.set_xlabel("Clean test accuracy (%)")
 ax.set_ylabel("Accuracy under attack, ε = 0.20 (%)")
 ax.set_title("Clean accuracy vs robustness trade-off")
-ax.legend(frameon=False, fontsize=7.5, loc="center left", bbox_to_anchor=(1.02, 0.5))
+ax.legend(frameon=False, fontsize=7.5, ncol=2, loc="upper center", bbox_to_anchor=(0.5, -0.14))
 fig.tight_layout()
 fig.savefig(PLOTS / "tradeoff_clean_vs_robust.png", dpi=200)
 plt.close(fig)
@@ -100,17 +105,17 @@ plt.close(fig)
 # ---------------------------------------------------------------- per-class bars
 pc = pd.read_csv(RES / "per_class_accuracy.csv")
 for atk in ("fgsm", "pgd"):
-    fig, ax = plt.subplots(figsize=(9, 4.2))
-    w = 0.2
+    fig, ax = plt.subplots(figsize=(7.2, 4.6))
+    w = 0.16
     for k, m in enumerate(ORDER):
         s = pc[(pc.model == m) & (pc.attack == atk)].groupby("digit")["accuracy"].mean()
-        ax.bar(s.index + (k - 1.5) * w, s.values, w, color=COLOR[m], label=LABEL[m])
+        ax.bar(s.index + (k - 2) * w, s.values, w, color=COLOR[m], label=LABEL[m])
     ax.set_xticks(range(10))
     ax.set_xlabel("True digit class")
     ax.set_ylabel("Accuracy at ε = 0.20 (%)")
-    ax.set_title(f"Per-class accuracy under {'FGSM' if atk == 'fgsm' else 'PGD-10'}, ε = 0.20 (mean of {n_seeds} seeds)")
+    ax.set_title(f"Per-class accuracy under {'FGSM' if atk == 'fgsm' else 'PGD-10'}, ε = 0.20 (mean of {n_seeds} seeds)", fontsize=9)
     ax.set_ylim(0, 105)
-    ax.legend(frameon=False, fontsize=8, ncol=2, loc="upper center", bbox_to_anchor=(0.5, -0.18))
+    ax.legend(frameon=False, fontsize=7.5, ncol=2, loc="upper center", bbox_to_anchor=(0.5, -0.16))
     fig.tight_layout()
     fig.savefig(PLOTS / f"per_class_{atk}_eps020.png", dpi=200)
     plt.close(fig)
@@ -118,7 +123,8 @@ for atk in ("fgsm", "pgd"):
 # ---------------------------------------------------------------- learning curves
 logs = pd.concat([pd.read_csv(f) for f in sorted(glob.glob(str(RES / "logs" / "*.csv")))])
 mon = [c for c in logs.columns if c.startswith("val_fgsm")][0]
-fig, axes = plt.subplots(1, 4, figsize=(15, 3.8))
+fig, axes = plt.subplots(2, 2, figsize=(7.2, 6.2))
+axes = axes.ravel()
 mon20 = "val_fgsm_eps0.20_acc"
 panels = [("train_loss", "Training loss"), ("val_clean_acc", "Validation accuracy, clean (%)"),
           (mon, "Validation accuracy under FGSM ε = 0.10 (%)"), (mon20, "Validation accuracy under FGSM ε = 0.20 (%)")]
@@ -129,10 +135,10 @@ for ax, (col, title) in zip(axes, panels):
             ax.plot(ds.epoch, ds[col], color=COLOR[m_], alpha=0.30, lw=1)
         ax.plot(sorted(d_.epoch.unique()), d_.groupby("epoch")[col].mean(), marker="o", ms=4,
                 color=COLOR[m_], label=LABEL[m_], lw=2)
-    ax.set_title(title, fontsize=9.5)
+    ax.set_title(title, fontsize=9)
     ax.set_xlabel("Epoch")
     ax.set_xticks(sorted(logs.epoch.unique()))
-axes[0].legend(frameon=False, fontsize=7.5)
+axes[0].legend(frameon=False, fontsize=7)
 fig.tight_layout()
 fig.savefig(PLOTS / "learning_curves.png", dpi=200)
 plt.close(fig)
@@ -140,11 +146,11 @@ plt.close(fig)
 # ---------------------------------------------------------------- training cost
 cost = logs.groupby(["model", "seed"])["epoch_train_seconds"].sum().groupby("model").agg(["mean", "std"]).round(1)
 cost.to_csv(RES / "training_time_seconds.csv")
-fig, ax = plt.subplots(figsize=(5.8, 3.6))
+fig, ax = plt.subplots(figsize=(6.2, 3.8))
 cost = cost.reindex(ORDER)
-ax.bar(range(4), cost["mean"], yerr=cost["std"].fillna(0), color=[COLOR[m] for m in ORDER], capsize=3)
-ax.set_xticks(range(4))
-ax.set_xticklabels(["Baseline", "Adv. 0.10", "Adv. 0.20", "Adv. 0.20+RS"], fontsize=8)
+ax.bar(range(len(ORDER)), cost["mean"], yerr=cost["std"].fillna(0), color=[COLOR[m] for m in ORDER], capsize=3)
+ax.set_xticks(range(len(ORDER)))
+ax.set_xticklabels(["Baseline", "FGSM-AT\n0.10", "FGSM-AT\n0.20", "FGSM-AT\n0.20+RS", "PGD-AT\n0.20"], fontsize=8)
 ax.set_ylabel("Training time, 5 epochs (s)")
 ax.set_title("Cost of adversarial training")
 fig.tight_layout()
